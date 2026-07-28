@@ -15,7 +15,7 @@ import firebase_admin
 from firebase_admin import credentials, db as firebase_db
 
 CREDENTIALS_FILE = "firebase-credentials.json"
-DATABASE_URL = "https://smart-automation-a7f81-default-rtdb.firebaseio.com/"
+DATABASE_URL = "add ur data nase url /"
 
 firebase_ok = False
 try:

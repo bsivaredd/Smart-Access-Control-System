@@ -154,7 +154,6 @@ pip install firebase-admin
 - Open `https://smart-automation-a7f81.web.app/` in Chrome, OR
 - Open `WebUI.html` directly in Chrome
 
-> ⚠️ **Important:** Never upload `firebase-credentials.json` to GitHub. It is your private key.
 
 ---
 

@@ -1,4 +1,4 @@
-# Smart Access Control & Intelligent Home Automation System
+# Smart Access Control 
 
 <div align="center">
 

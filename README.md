@@ -185,7 +185,7 @@ pip install firebase-admin
 
 | Component | Qty |
 |---|---|
-| Arduino UNO Q (ABX00162) | 1 |
+| Arduino UNO Q (ABX00162 ) | 1 |
 | DHT11 Temperature & Humidity Sensor | 1 |
 | Soil Moisture Sensor | 1 |
 | MQ-2 Gas Sensor | 1 |

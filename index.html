@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Access & Irrigation Control</title>
+  <!-- Google Font & FontAwesome Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Load Vlad Mandic Face-API mirror -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+
+  <style>
+    :root {
+      --bg: #0b0b16;
+      --card: rgba(255,255,255,0.03);
+      --border: rgba(255,255,255,0.08);
+      --cyan: #06b6d4;
+      --purple: #8b5cf6;
+      --magenta: #d946ef;
+      --success: #10b981;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(ellipse at top right, #1d093a 0%, #0b0b16 70%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 15px;
+    }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 {
+      font-size: 1.4rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header p { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+    /* Dashboard Layout */
+    .grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 1000px; margin: 0 auto; }
+    @media(min-width: 768px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 16px; backdrop-filter: blur(16px);
+    }
+    .section-lbl {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+    }
+
+    /* Video Feed Container */
+    .video-container {
+      position: relative; width: 100%; border-radius: 12px; overflow: hidden;
+      background: #000; aspect-ratio: 4/3; margin-bottom: 12px; border: 1px solid var(--border);
+    }
+    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+
+    /* Telemetry Display */
+    .telemetry-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .t-block {
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .t-block .val { font-size: 1.35rem; font-weight: 700; }
+    .t-block .unit { font-size: 0.75rem; color: var(--muted); }
+    .t-block i { font-size: 1.25rem; color: var(--cyan); }
+
+    /* Solenoid Toggle Card */
+    .solenoid-row { display: flex; align-items: center; justify-content: space-between; }
+    .solenoid-status { font-size: 0.8rem; font-weight: 600; color: var(--danger); margin-top: 3px; }
+    .card.unlocked { border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.06); }
+    .card.unlocked .solenoid-status { color: var(--success); }
+    .sol-btn {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: none; border-radius: 10px; color: white; padding: 10px 18px;
+      font-weight: 600; cursor: pointer; transition: transform 0.1s, opacity 0.2s;
+    }
+    .sol-btn:active { transform: scale(0.96); }
+
+    /* Relay Toggles */
+    .relay-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .relay-row:last-child { border-bottom: none; }
+    .relay-info { flex-grow: 1; margin-right: 10px; }
+    .relay-name-inp {
+      background: transparent; border: none; outline: none; color: var(--text);
+      font-family: inherit; font-size: 0.9rem; font-weight: 600; width: 100%;
+    }
+    .relay-name-inp:focus { background: rgba(255,255,255,0.06); border-radius: 4px; padding: 1px 4px; }
+    .relay-desc { font-size: 0.72rem; color: var(--muted); }
+
+    /* Toggle Switch */
+    .sw { position: relative; display: inline-block; width: 44px; height: 22px; }
+    .sw input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.1); border: 1px solid var(--border); transition: .3s; border-radius: 20px; }
+    .slider::before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background: var(--muted); transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background: var(--purple); }
+    input:checked + .slider::before { transform: translateX(22px); background: white; }
+
+    /* Enrollment form */
+    .enroll-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .input-text { flex-grow: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-family: inherit; font-size: 0.85rem; }
+    .enroll-btn { background: var(--cyan); border: none; border-radius: 8px; color: white; padding: 0 16px; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+
+    /* Badges */
+    .badge-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .badge { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; }
+    .badge button { background: transparent; border: none; color: var(--danger); font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+
+    /* Voice mic */
+    .voice-box { text-align: center; }
+    .mic-btn { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--magenta), var(--purple)); border: none; color: white; font-size: 1.3rem; cursor: pointer; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; transition: all 0.3s; }
+    .mic-btn.listening { background: var(--danger); animation: pulse 1s infinite alternate; }
+    @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+    .transcript { background: rgba(0,0,0,0.2); border: 1px dashed var(--border); border-radius: 8px; padding: 8px; min-height: 36px; font-size: 0.8rem; color: var(--muted); font-style: italic; text-align: left; }
+    
+    /* Threshold Range Input Style */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+      -webkit-appearance: none;
+      margin-top: -6px;
+      box-shadow: 0 0 8px var(--cyan);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1><i class="fa-solid fa-shield-halved"></i> Smart Access & Irrigation</h1>
+    <p>Arduino UNO Q Dashboard with Facial Authentication</p>
+  </div>
+
+  <div class="grid">
+    <!-- Left Column: Camera Authentication & Profile Management -->
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="section-lbl"><i class="fa-solid fa-camera"></i> Live Authentication Camera</div>
+        <div class="video-container">
+          <video id="webcam" autoplay muted playsinline></video>
+          <canvas id="overlay"></canvas>
+        </div>
+        <div id="engine-status" style="font-size: 0.75rem; color: var(--muted); text-align: center;">
+          <i class="fa-solid fa-circle-notch fa-spin"></i> Loading AI Models...
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-lbl"><i class="fa-solid fa-user-plus"></i> Face Profile Registry</div>
+        <div class="enroll-row">
+          <input type="text" id="face-name" class="input-text" placeholder="Enter Full Name">
+          <button class="enroll-btn" onclick="captureFace()">Enroll</button>
+        </div>
+        <div class="badge-grid" id="face-badges">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Relays, Sensor Readings, and Voice Commands -->
+    <div>
+      <!-- Telemetry & Moisture -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="section-lbl"><i class="fa-solid fa-chart-line"></i> Telemetry & Status</div>
+        <div class="telemetry-row">
+          <div class="t-block">
+            <div>
+              <div style="font-size: 0.65rem; color: var(--muted);">TEMP</div>
+              <div class="val"><span id="temp-val">--</span><span class="unit">°C</span></div>
+            </div>
+            <i class="fa-solid fa-temperature-half" style="color: var(--cyan);"></i>
+          </div>
+          <div class="t-block">
+            <div>
+              <div style="font-size: 0.65rem; color: var(--muted);">HUMIDITY</div>
+              <div class="val"><span id="hum-val">--</span><span class="unit">%</span></div>
+            </div>
+            <i class="fa-solid fa-droplet" style="color: var(--purple);"></i>
+          </div>
+          <div class="t-block">
+            <div>
+              <div style="font-size: 0.65rem; color: var(--muted);">SOIL</div>
+              <div class="val"><span id="soil-val">--</span><span class="unit"> ADC</span></div>
+            </div>
+            <i class="fa-solid fa-seedling" style="color: var(--success);"></i>
+          </div>
+        </div>
+
+        <div class="card" id="solenoid-card">
+          <div class="solenoid-row">
+            <div>
+              <strong style="font-size: 0.95rem;">Solenoid / Irrigation Motor</strong>
+              <div class="solenoid-status" id="sol-status">LOCKED</div>
+            </div>
+            <button class="sol-btn" id="sol-btn" onclick="triggerUnlock()">Unlock (3s)</button>
+          </div>
+          
+          <!-- Auto/Manual Settings -->
+          <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.8rem; font-weight: 600;">Irrigation Mode:</span>
+              <div style="display: flex; gap: 6px;">
+                <button id="mode-manual-btn" class="sol-btn" style="padding: 6px 12px; font-size: 0.75rem;" onclick="setMode('MANUAL')">MANUAL</button>
+                <button id="mode-auto-btn" class="sol-btn" style="padding: 6px 12px; font-size: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border);" onclick="setMode('AUTO')">AUTO</button>
+              </div>
+            </div>
+            
+            <div id="threshold-container" style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+                <span style="color: var(--muted);">Target Soil Threshold (Higher = Drier):</span>
+                <strong id="threshold-val" style="color: var(--cyan);">600</strong>
+              </div>
+              <input type="range" id="threshold-slider" min="0" max="1023" value="600" oninput="updateThresholdText(this.value)" onchange="sendThresholdValue(this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Relays -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="section-lbl"><i class="fa-solid fa-bolt"></i> Power Relays</div>
+        <div class="relay-row" id="r1-card">
+          <div class="relay-info">
+            <input class="relay-name-inp" id="r1-name" value="Relay 1" onblur="renameRelay(1, this.value)">
+            <div class="relay-desc" id="r1-desc">OFF — Pin 3</div>
+          </div>
+          <label class="sw">
+            <input type="checkbox" id="r1-toggle" onchange="toggleRelay(1, this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="relay-row" id="r2-card">
+          <div class="relay-info">
+            <input class="relay-name-inp" id="r2-name" value="Relay 2" onblur="renameRelay(2, this.value)">
+            <div class="relay-desc" id="r2-desc">OFF — Pin 4</div>
+          </div>
+          <label class="sw">
+            <input type="checkbox" id="r2-toggle" onchange="toggleRelay(2, this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="relay-row" id="r3-card">
+          <div class="relay-info">
+            <input class="relay-name-inp" id="r3-name" value="Relay 3" onblur="renameRelay(3, this.value)">
+            <div class="relay-desc" id="r3-desc">OFF — Pin 5</div>
+          </div>
+          <label class="sw">
+            <input type="checkbox" id="r3-toggle" onchange="toggleRelay(3, this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Voice commands -->
+      <div class="card">
+        <div class="section-lbl"><i class="fa-solid fa-microphone"></i> Smart Voice Commands</div>
+        <div class="voice-box">
+          <button class="mic-btn" id="mic-btn" onclick="toggleVoice()"><i class="fa-solid fa-microphone"></i></button>
+          <div class="transcript" id="transcript">Click mic and say "open gate" or "turn on [device]"</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- App Lab Communication Link -->
+  <script src="https://arduino.cc/applab/messaging.js"></script>
+
+  <script>
+    const webcam = document.getElementById("webcam");
+    const canvas = document.getElementById("overlay");
+    const statusText = document.getElementById("engine-status");
+    
+    let isModelsLoaded = false;
+    let facesDatabase = {}; // format: { name: [descriptor values] }
+    let lastUnlockTime = 0; // debounce solenoid unlock triggers
+
+    const relayState = { 1: false, 2: false, 3: false };
+    const relayNames = { 1: "Relay 1", 2: "Relay 2", 3: "Relay 3" };
+    let solenoidOpen = false;
+    let currentMode = "MANUAL";
+    let targetSoil = 600;
+
+    // ── App Lab Messaging Listener ────────────────────────────────────
+    Messaging.on("initial_state", function(data) {
+      solenoidOpen = data.solenoid;
+      currentMode = data.mode || "MANUAL";
+      targetSoil = data.target_soil || 600;
+
+      updateSolenoidUI();
+      updateModeButtons();
+
+      document.getElementById("threshold-slider").value = targetSoil;
+      document.getElementById("threshold-val").textContent = targetSoil;
+
+      if (data.temperature) document.getElementById("temp-val").textContent = data.temperature.toFixed(1);
+      if (data.humidity) document.getElementById("hum-val").textContent = data.humidity.toFixed(1);
+      if (data.soil !== undefined) document.getElementById("soil-val").textContent = data.soil;
+
+      if (data.relays) {
+        data.relays.forEach(r => {
+          relayState[r.id] = r.state;
+          relayNames[r.id] = r.name;
+          document.getElementById("relay" + r.id + "-name").value = r.name;
+          document.getElementById("relay" + r.id + "-toggle").checked = r.state;
+          document.getElementById("relay" + r.id + "-desc").textContent = (r.state ? "ON" : "OFF") + " — Pin " + (r.id + 2);
+        });
+      }
+
+      if (data.faces) {
+        facesDatabase = data.faces;
+        renderFaceBadges();
+      }
+    });
+
+    Messaging.on("telemetry_update", function(data) {
+      if (data.temperature !== undefined) document.getElementById("temp-val").textContent = data.temperature.toFixed(1);
+      if (data.humidity !== undefined) document.getElementById("hum-val").textContent = data.humidity.toFixed(1);
+      if (data.soil !== undefined) document.getElementById("soil-val").textContent = data.soil;
+    });
+
+    Messaging.on("solenoid_update", function(data) {
+      solenoidOpen = data.state;
+      updateSolenoidUI();
+    });
+
+    Messaging.on("relay_update", function(data) {
+      relayState[data.id] = data.state;
+      document.getElementById("relay" + data.id + "-toggle").checked = data.state;
+      document.getElementById("relay" + data.id + "-desc").textContent = (data.state ? "ON" : "OFF") + " — Pin " + (data.id + 2);
+    });
+
+    Messaging.on("mode_update", function(data) {
+      currentMode = data.mode;
+      updateModeButtons();
+      updateSolenoidUI();
+    });
+
+    Messaging.on("target_soil_update", function(data) {
+      targetSoil = data.target_soil;
+      document.getElementById("threshold-slider").value = targetSoil;
+      document.getElementById("threshold-val").textContent = targetSoil;
+    });
+
+    Messaging.on("faces_update", function(data) {
+      facesDatabase = data.faces || {};
+      renderFaceBadges();
+    });
+
+    // ── UI Actions ───────────────────────────────────────────────────
+    function triggerUnlock() {
+      if (currentMode === "MANUAL") {
+        Messaging.send("toggle_solenoid", {});
+      }
+    }
+
+    function toggleRelay(id, state) {
+      relayState[id] = state;
+      document.getElementById("relay" + id + "-desc").textContent = (state ? "ON" : "OFF") + " — Pin " + (id + 2);
+      Messaging.send("toggle_relay", { id: id });
+    }
+
+    function renameRelay(id, name) {
+      name = name.trim();
+      if (!name) return;
+      relayNames[id] = name;
+      Messaging.send("rename_relay", { id: id, name: name });
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      updateModeButtons();
+      updateSolenoidUI();
+      Messaging.send("change_mode", { mode: mode });
+    }
+
+    function updateModeButtons() {
+      const manualBtn = document.getElementById("mode-manual-btn");
+      const autoBtn = document.getElementById("mode-auto-btn");
+      
+      if (currentMode === "AUTO") {
+        autoBtn.style.background = "var(--cyan)";
+        autoBtn.style.borderColor = "var(--cyan)";
+        manualBtn.style.background = "rgba(255,255,255,0.05)";
+        manualBtn.style.borderColor = "var(--border)";
+      } else {
+        manualBtn.style.background = "linear-gradient(135deg, var(--cyan), var(--purple))";
+        manualBtn.style.borderColor = "transparent";
+        autoBtn.style.background = "rgba(255,255,255,0.05)";
+        autoBtn.style.borderColor = "var(--border)";
+      }
+    }
+
+    function updateThresholdText(val) {
+      document.getElementById("threshold-val").textContent = val;
+    }
+
+    function sendThresholdValue(val) {
+      Messaging.send("change_target_soil", { target_soil: parseInt(val) });
+    }
+
+    function updateSolenoidUI() {
+      const card = document.getElementById("solenoid-card");
+      const status = document.getElementById("sol-status");
+      const btn = document.getElementById("sol-btn");
+      
+      if (solenoidOpen) {
+        card.className = "card unlocked";
+        status.textContent = "UNLOCKED (OPEN)";
+      } else {
+        card.className = "card";
+        status.textContent = "LOCKED";
+      }
+
+      if (currentMode === "AUTO") {
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+        btn.textContent = "Auto Control";
+        status.textContent = "AUTO MODE — " + (solenoidOpen ? "PUMPING (ON)" : "STANDBY (OFF)");
+        status.style.color = solenoidOpen ? "var(--success)" : "var(--muted)";
+      } else {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.textContent = "Unlock (3s)";
+        status.style.color = solenoidOpen ? "var(--success)" : "var(--danger)";
+      }
+    }
+
+    // ── Facial Recognition Engine ────────────────────────────────────
+    window.addEventListener("load", async () => {
+      setTimeout(() => { Messaging.send("get_initial_state", {}); }, 800);
+      
+      try {
+        const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/";
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        
+        isModelsLoaded = true;
+        statusText.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i> Facial Recognition Online';
+        startWebcam();
+      } catch (e) {
+        console.error(e);
+        statusText.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:var(--danger)"></i> Model Loading Failed';
+      }
+    });
+
+    async function startWebcam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        webcam.srcObject = stream;
+        webcam.addEventListener("play", faceRecognitionLoop);
+      } catch (err) {
+        console.error(err);
+        statusText.innerHTML = '<i class="fa-solid fa-video-slash" style="color:var(--danger)"></i> Camera Access Denied';
+      }
+    }
+
+    async function faceRecognitionLoop() {
+      const displaySize = { width: webcam.videoWidth, height: webcam.videoHeight };
+      faceapi.matchDimensions(canvas, displaySize);
+
+      setInterval(async () => {
+        if (!isModelsLoaded || webcam.paused || webcam.ended) return;
+
+        const detections = await faceapi.detectAllFaces(webcam, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Convert stored face descriptors
+        const faceKeys = Object.keys(facesDatabase);
+        let matcher = null;
+        if (faceKeys.length > 0) {
+          const labeledDescriptors = faceKeys.map(name => {
+            return new faceapi.LabeledFaceDescriptors(name, [new Float32Array(facesDatabase[name])]);
+          });
+          matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+        }
+
+        resizedDetections.forEach(detection => {
+          let label = "Unknown";
+          let color = "var(--danger)";
+
+          if (matcher) {
+            const bestMatch = matcher.findBestMatch(detection.descriptor);
+            if (bestMatch.label !== "unknown") {
+              label = bestMatch.label;
+              color = "var(--success)";
+
+              // Unlock gate in Manual mode
+              if (currentMode === "MANUAL") {
+                const now = Date.now();
+                if (now - lastUnlockTime > 10000) {
+                  lastUnlockTime = now;
+                  triggerUnlock();
+                }
+              }
+            }
+          }
+
+          // Draw Box
+          const box = detection.detection.box;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+          // Draw text label
+          ctx.fillStyle = color;
+          ctx.font = "14px Outfit";
+          ctx.fillText(label, box.x, box.y > 15 ? box.y - 8 : box.y + 15);
+        });
+      }, 300);
+    }
+
+    async function captureFace() {
+      const nameInput = document.getElementById("face-name");
+      const name = nameInput.value.trim();
+      if (!name) { alert("Please enter a name first."); return; }
+
+      statusText.textContent = "Analyzing face... stand still";
+      const detection = await faceapi.detectSingleFace(webcam, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        alert("Face not detected. Look directly at the camera and try again.");
+        statusText.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i> Facial Recognition Online';
+        return;
+      }
+
+      const descriptorArray = Array.from(detection.descriptor);
+      Messaging.send("register_face", { name: name, descriptor: descriptorArray });
+      
+      nameInput.value = "";
+      alert("Enrolled successfully!");
+      statusText.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--success)"></i> Facial Recognition Online';
+    }
+
+    function renderFaceBadges() {
+      const container = document.getElementById("face-badges");
+      container.innerHTML = "";
+      const keys = Object.keys(facesDatabase);
+      if (keys.length === 0) {
+        container.innerHTML = '<span style="font-size:0.75rem; color:var(--muted)">No enrolled profiles</span>';
+        return;
+      }
+      keys.forEach(name => {
+        const badge = document.createElement("div");
+        badge.className = "badge";
+        badge.innerHTML = `<span>${name}</span><button onclick="deleteFace('${name}')">&times;</button>`;
+        container.appendChild(badge);
+      });
+    }
+
+    function deleteFace(name) {
+      if (confirm("Delete profile for " + name + "?")) {
+        Messaging.send("delete_face", { name: name });
+      }
+    }
+
+    // ── Voice Commands ──
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let voiceRecog = null;
+
+    if (SpeechRecognition) {
+      voiceRecog = new SpeechRecognition();
+      voiceRecog.continuous = false;
+      voiceRecog.lang = "en-US";
+      voiceRecog.interimResults = false;
+
+      voiceRecog.onstart = () => {
+        document.getElementById("mic-btn").classList.add("listening");
+        document.getElementById("transcript").textContent = "Listening... Speak command!";
+      };
+      voiceRecog.onend = () => {
+        document.getElementById("mic-btn").classList.remove("listening");
+      };
+      voiceRecog.onresult = (e) => {
+        const text = e.results[0][0].transcript.toLowerCase().trim();
+        document.getElementById("transcript").textContent = '"' + text + '"';
+        handleVoiceCommand(text);
+      };
+      voiceRecog.onerror = (e) => {
+        document.getElementById("transcript").textContent = "Error: " + e.error;
+      };
+    }
+
+    function toggleVoice() {
+      if (!voiceRecog) { alert("Speech recognition not supported."); return; }
+      voiceRecog.start();
+    }
+
+    function handleVoiceCommand(text) {
+      // Solenoid Commands (Manual Mode only)
+      if (text.includes("unlock") || text.includes("open gate") || text.includes("open door") || text.includes("open solenoid")) {
+        if (currentMode === "MANUAL") {
+          triggerUnlock();
+        }
+        return;
+      }
+      // Everything commands
+      if (text.includes("everything") || text.includes("all devices")) {
+        const turnOn = text.includes("on") || text.includes("activate");
+        [1,2,3].forEach(id => {
+          relayState[id] = turnOn;
+          document.getElementById("relay" + id + "-toggle").checked = turnOn;
+          toggleRelay(id, turnOn);
+        });
+        return;
+      }
+      // Mode commands
+      if (text.includes("automatic mode") || text.includes("auto mode")) {
+        setMode("AUTO");
+        return;
+      }
+      if (text.includes("manual mode")) {
+        setMode("MANUAL");
+        return;
+      }
+      // Specific relay commands
+      let matchedId = null;
+      for (let i = 1; i <= 3; i++) {
+        if (text.includes(relayNames[i].toLowerCase()) || text.includes("relay " + i) || text.includes("device " + i)) {
+          matchedId = i;
+          break;
+        }
+      }
+      if (matchedId) {
+        const turnOn = text.includes("on") || text.includes("activate") || text.includes("start");
+        toggleRelay(matchedId, turnOn);
+      }
+    }
+  </script>
+</body>
+</html>

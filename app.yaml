@@ -1,0 +1,16 @@
+name: Smart Access Control
+description: Smart home automation with face recognition, voice control, relays, motors, sensors, and Firebase.
+version: "1.0"
+
+# ── AUTORUN ────────────────────────────────────────────────────────────────────
+autorun: true
+
+# ── MAIN ENTRY POINT ──────────────────────────────────────────────────────────
+main: main.py
+
+# ── SKETCH ────────────────────────────────────────────────────────────────────
+sketch: sketch.ino
+
+# ── PYTHON LIBRARIES ─────────────────────────────────────────────────────────
+libraries:
+  - pyserial
